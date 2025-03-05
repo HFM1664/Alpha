@@ -1,0 +1,105 @@
+### HM Basic Alpha Biodiversity calculations for Antarctic Benthic Ecology Project
+######### CHRIS Alpha diveristy code
+install.packages("vegan", dependencies = TRUE)
+
+require (tidyverse)
+require(vegan)
+library(vegan)
+
+
+
+ABEP <- read.csv("DIS/Data/PEAR1.csv", header = TRUE)
+meta <- read.csv("DIS/Data/CTD.csv", header = T)
+
+## Do some tidying ##
+#####################
+## First, there are empty rows, so get rid of those.
+## There are also multiple columns called 'x' so get rid of those for now too (until we've check what they are).
+## Add a col name for column 1
+
+ABEP <- na.omit(ABEP)
+ABEP <- ABEP %>% select(-contains("x."))
+colnames(ABEP)[1] <- "Sample.ID"
+
+## Do some initial exploration at the level of site ##
+######################################################
+## need to make a decision on whether you want to analyse the data at the level of 'image' or site. Let's generate diversity metrics for images and then summarise those by site for a first look
+
+diversity <- data.frame(Sample.ID = ABEP$Sample.ID,
+                        H = diversity(ABEP[,-1], index = "shannon"),
+                        SpR = rowSums(ABEP[,-1] !=0) )
+
+
+## pair up the diversity and meta data. The sample IDs don't line up perfectly, so we'll join on sample.ID and accept the loss of some data
+diversity <- inner_join(diversity, meta, by = "Sample.ID")
+
+## summarise by site for an initial look. first need a column with site name
+
+diversity <- diversity %>% separate(Sample.ID, into = c('image','image2','site','ID'), remove = F)
+write_csv(diversity, '~/DIS/Data/meta_data.csv')
+
+
+## make a site summary of mean H, SpR, and env variables. Note, should add standard deviation too
+summary_by_site <- diversity %>% 
+  group_by(site) %>% 
+  summarise(across(H:Turbidity, mean))
+
+## reorganise to make plotting diversity versus env variables easier
+## a quick eyeball of the plots suggests that there might be a trend between depth and diversity
+summary_by_site <- summary_by_site %>%
+  pivot_longer( cols = Depth:Turbidity, names_to = 'env_var', values_to = 'value')
+
+ggplot (summary_by_site, aes(value, H))+
+  geom_point()+
+  facet_wrap(~env_var, scales = 'free')
+
+ggplot (summary_by_site, aes(value, SpR))+
+  geom_point()+
+  facet_wrap(~env_var, scales = 'free')
+
+
+
+
+
+
+
+
+
+
+##############𝛼 multiple liner regression 05/3/25
+metaclean22 <- read.csv("DIS/Data/metaclean22.csv", header = T)
+metaA <- read.csv("DIS/Data/meta_data.csv", header = T)
+
+
+
+diversity23 <- inner_join(diversity, metaA, by = "Sample.ID")
+
+## summarise by site for an initial look. first need a column with site name
+head(diversity23)
+
+summary23 <- diversity23 %>% 
+  group_by(site.x) %>% 
+  summarise(across(H.x:Turbidity.x, mean))
+
+
+
+
+summary23 <- summary23 %>%
+  pivot_longer( cols = Depth.x:Turbidity.x, names_to = 'env_var', values_to = 'value')
+
+ggplot (summary23, aes(value, H.x))+
+  geom_point()+
+  facet_wrap(~env_var, scales = 'free')
+
+ggplot (summary23, aes(value, SpR.x))+
+  geom_point()+
+  facet_wrap(~env_var, scales = 'free')
+
+head(summary23)
+summary23$site.x <- as.factor(summary23$site.x)
+MLR <- lm(H.x ~ env_var + site.x, data = summary23)
+summary(MLR)
+
+# Diagnostic plots to check assumptions of linear regression
+par(mfrow = c(2, 2))  
+plot(MLR)
